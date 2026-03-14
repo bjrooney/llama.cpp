@@ -1,0 +1,152 @@
+{
+  "project": "llama.cpp CUDA build — GTX 1070 on Fedora 43",
+  "last_updated": "2026-03-14",
+  "source": {
+    "repo": "https://github.com/ggml-org/llama.cpp",
+    "commit": "feefb928367a01c1912975f0b277a48a14bbcadf",
+    "local_path": "/home/brendan/llama.cpp"
+  },
+  "system": {
+    "os": "Fedora 43",
+    "kernel": "6.18.16-200.fc43.x86_64",
+    "glibc": "2.42",
+    "cpu": "Intel Xeon E5-2667 v4 @ 3.20GHz",
+    "cpu_threads": 16,
+    "gpu": {
+      "name": "NVIDIA GeForce GTX 1070",
+      "vram_mib": 8192,
+      "compute_capability": "6.1",
+      "architecture": "Pascal",
+      "driver_version": "580.126.18"
+    }
+  },
+  "cuda": {
+    "toolkit_path": "/usr/local/cuda-12.6",
+    "toolkit_version": "12.6",
+    "default_symlink": "/usr/local/cuda",
+    "note": "CUDA 13.x dropped sm_61 (Pascal). CUDA 12.6 is the last version supporting Pascal. Installed from NVIDIA fedora39 repo.",
+    "patches": [
+      {
+        "file": "/usr/local/cuda-12.6/targets/x86_64-linux/include/crt/math_functions.h",
+        "reason": "glibc 2.42 added cospi/sinpi/rsqrt to mathcalls.h with noexcept(true). CUDA 12.6 declares same functions without noexcept, causing conflict.",
+        "fix": "Added noexcept to declarations of rsqrt, rsqrtf, sinpi, sinpif, cospi, cospif",
+        "backup": "/usr/local/cuda-12.6/targets/x86_64-linux/include/crt/math_functions.h.bak"
+      }
+    ],
+    "nvidia_repo": {
+      "file": "/etc/yum.repos.d/cuda-fedora39.repo",
+      "url": "https://developer.download.nvidia.com/compute/cuda/repos/fedora39/x86_64/cuda-fedora39.repo",
+      "install_command": "sudo dnf install --repo=cuda-fedora39-x86_64 -y cuda-toolkit-12-6"
+    }
+  },
+  "build": {
+    "cmake_binary": "/usr/bin/cmake",
+    "cmake_note": "Must use system cmake — Homebrew cmake lacks Clang-CUDA.cmake module",
+    "c_compiler": "/usr/bin/clang-21",
+    "cxx_compiler": "/usr/bin/clang++-21",
+    "cuda_compiler": "/usr/bin/clang++-21",
+    "cuda_compiler_note": "Using clang instead of nvcc avoids cudafe preprocessor, which is incompatible with GCC 14/15 and glibc 2.42",
+    "cmake_flags": {
+      "GGML_CUDA": "ON",
+      "CMAKE_CUDA_COMPILER": "/usr/bin/clang++-21",
+      "CMAKE_C_COMPILER": "/usr/bin/clang-21",
+      "CMAKE_CXX_COMPILER": "/usr/bin/clang++-21",
+      "CUDAToolkit_ROOT": "/usr/local/cuda-12.6",
+      "CMAKE_CUDA_FLAGS": "--cuda-path=/usr/local/cuda-12.6 --gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14 -Wno-unknown-cuda-version",
+      "CMAKE_CXX_FLAGS": "--gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14",
+      "CMAKE_C_FLAGS": "--gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14"
+    },
+    "build_command": "rm -rf build && /usr/bin/cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/bin/clang++-21 -DCMAKE_C_COMPILER=/usr/bin/clang-21 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-21 -DCUDAToolkit_ROOT=/usr/local/cuda-12.6 \"-DCMAKE_CUDA_FLAGS=--cuda-path=/usr/local/cuda-12.6 --gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14 -Wno-unknown-cuda-version\" \"-DCMAKE_CXX_FLAGS=--gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14\" \"-DCMAKE_C_FLAGS=--gcc-install-dir=/usr/lib/gcc/x86_64-redhat-linux/14\" -S /home/brendan/llama.cpp && /usr/bin/cmake --build build --parallel $(nproc)",
+    "source_patches": [
+      {
+        "file": "ggml/src/ggml-cuda/CMakeLists.txt",
+        "reason": "Clang does not support nvcc-only flags -use_fast_math and -extended-lambda",
+        "fix": "Added CMAKE_CUDA_COMPILER_ID check: use -ffast-math for Clang, -use_fast_math -extended-lambda for nvcc"
+      }
+    ],
+    "cuda_architectures_detected": "61-real",
+    "output_binaries": "/home/brendan/llama.cpp/build/bin/"
+  },
+  "deployment": {
+    "binary": "/usr/local/bin/llama-server",
+    "libs_path": "/usr/local/lib/",
+    "deploy_commands": [
+      "sudo cp build/bin/llama-server /usr/local/bin/llama-server",
+      "sudo cp build/bin/libggml*.so* build/bin/libllama*.so* /usr/local/lib/",
+      "sudo ldconfig",
+      "sudo systemctl daemon-reload"
+    ]
+  },
+  "services": {
+    "llama-server": {
+      "unit_file": "/etc/systemd/system/llama-server.service",
+      "enabled": false,
+      "port": 11434,
+      "model": "/home/brendan/.lmstudio/models/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "model_alias": "qwen2.5-coder-7b",
+      "args": {
+        "--n-gpu-layers": 33,
+        "--ctx-size": 8192,
+        "--parallel": 1,
+        "--threads": 16,
+        "--host": "0.0.0.0"
+      },
+      "user": "ollama",
+      "group": "ollama",
+      "note": "Port 11434 conflicts with Ollama — stop ollama.service before starting"
+    }
+  },
+  "models": [
+    {
+      "name": "Qwen2.5-Coder-7B-Instruct Q4_K_M",
+      "path": "/home/brendan/.lmstudio/models/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "size_gib": 4.36,
+      "params": "7.62B",
+      "use_case": "code generation, primary server model"
+    },
+    {
+      "name": "DeepSeek-R1-0528-Qwen3-8B Q4_K_M",
+      "path": "/home/brendan/.lmstudio/models/lmstudio-community/DeepSeek-R1-0528-Qwen3-8B-GGUF/DeepSeek-R1-0528-Qwen3-8B-Q4_K_M.gguf",
+      "size_gib": 4.68,
+      "params": "8B",
+      "use_case": "reasoning tasks",
+      "n_gpu_layers": 36,
+      "note": "All 36 layers on GPU"
+    }
+  ],
+  "benchmarks": {
+    "date": "2026-03-14",
+    "tool": "llama-bench",
+    "model": "Qwen2.5-Coder-7B Q4_K_M",
+    "gpu_layers": 99,
+    "results": {
+      "prompt_processing_pp512_ts": 489,
+      "token_generation_tg128_ts": 32.5
+    },
+    "tuning_findings": {
+      "flash_attention": "slower on Pascal sm_61 (~473 vs ~489 t/s pp512) — leave disabled",
+      "thread_count": "no effect when fully GPU-bound — 4 vs 16 threads identical",
+      "ngl_above_layer_count": "no effect — Qwen2.5-7B has 28 layers, ngl=33 already fully offloads"
+    },
+    "api_speed_test": {
+      "prompt_tokens": 42,
+      "completion_tokens": 512,
+      "prompt_eval_ts": 276,
+      "generation_ts": 32.5
+    }
+  },
+  "known_issues": [
+    {
+      "issue": "Port 11434 conflict with Ollama",
+      "fix": "sudo systemctl stop ollama"
+    },
+    {
+      "issue": "llama-bench stray process holds VRAM after kill",
+      "fix": "Check nvidia-smi and kill PID explicitly before starting llama-server"
+    },
+    {
+      "issue": "CUDA 13.x default at /usr/local/cuda drops Pascal support",
+      "fix": "Always pass -DCUDAToolkit_ROOT=/usr/local/cuda-12.6 explicitly to cmake"
+    }
+  ]
+}
