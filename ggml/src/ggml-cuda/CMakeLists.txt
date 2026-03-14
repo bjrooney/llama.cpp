@@ -184,7 +184,11 @@ if (CUDAToolkit_FOUND)
 
     set(CUDA_CXX_FLAGS "")
 
-    set(CUDA_FLAGS -use_fast_math -extended-lambda)
+    if (CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
+        set(CUDA_FLAGS -ffast-math)
+    else()
+        set(CUDA_FLAGS -use_fast_math -extended-lambda)
+    endif()
 
     if (GGML_CUDA_DEBUG)
         list(APPEND CUDA_FLAGS -lineinfo)
